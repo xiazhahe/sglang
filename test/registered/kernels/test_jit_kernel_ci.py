@@ -7,7 +7,7 @@ from pathlib import Path
 from sglang.test.ci.ci_register import register_cuda_ci
 
 register_cuda_ci(est_time=900, suite="stage-b-kernel")
-register_cuda_ci(est_time=1800, suite="stage-b-kernel", nightly=True)
+register_cuda_ci(est_time=1800, suite="nightly-kernel", nightly=True)
 
 
 class TestJITKernelCI(unittest.TestCase):

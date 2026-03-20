@@ -13,7 +13,7 @@ on:
         options:
           - 'all'
           - 'nightly-test-general-1-gpu-runner'
-          - 'stage-b-kernel-nightly'
+          - 'nightly-test-kernel-1-gpu-runner'
           - 'nightly-test-general-4-gpu-h100'
           - 'nightly-test-general-8-gpu-h200'
           - 'nightly-test-general-8-gpu-h20'
@@ -73,8 +73,8 @@ jobs:
       - uses: ./.github/actions/upload-cuda-coredumps
         if: always()
 
-  stage-b-kernel-nightly:
-    if: github.repository == 'sgl-project/sglang' && (inputs.job_filter == '' || inputs.job_filter == 'all' || inputs.job_filter == 'stage-b-kernel-nightly')
+  nightly-test-kernel-1-gpu-runner:
+    if: github.repository == 'sgl-project/sglang' && (inputs.job_filter == '' || inputs.job_filter == 'all' || inputs.job_filter == 'nightly-test-kernel-1-gpu-runner')
     runs-on: 1-gpu-runner
     timeout-minutes: 240
     env:
@@ -91,11 +91,11 @@ jobs:
         run: |
           bash scripts/ci/cuda/ci_install_dependency.sh
 
-      - name: Run full nightly test
+      - name: Run nightly kernel test
         timeout-minutes: 60
         run: |
           cd test
-          python3 run_suite.py --hw cuda --suite stage-b-kernel --nightly --continue-on-error --timeout-per-file 5400
+          python3 run_suite.py --hw cuda --suite nightly-kernel --nightly --continue-on-error --timeout-per-file 5400
 
       - uses: ./.github/actions/upload-cuda-coredumps
         if: always()
@@ -637,7 +637,7 @@ jobs:
     if: github.repository == 'sgl-project/sglang' && always()
     needs:
       - nightly-test-general-1-gpu-runner
-      - stage-b-kernel-nightly
+      - nightly-test-kernel-1-gpu-runner
       - nightly-test-general-4-gpu-h100
       - nightly-test-general-8-gpu-h200
       - nightly-test-general-8-gpu-h20

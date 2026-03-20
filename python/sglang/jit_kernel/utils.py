@@ -206,7 +206,7 @@ def load_jit(
             build_directory=build_directory,
         )
     finally:
-        # Reset TVM_FFI_CUDA_ARCH_LIST to original state (not exist)
+        # Reset TVM_FFI_CUDA_ARCH_LIST to its original state.
         if not env_existed:
             del os.environ[env_key]
 
