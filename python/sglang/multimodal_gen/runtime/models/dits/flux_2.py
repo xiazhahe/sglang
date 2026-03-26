@@ -28,7 +28,11 @@ from sglang.multimodal_gen.runtime.layers.layernorm import (
     apply_qk_norm,
     apply_qk_norm_rope,
 )
-from sglang.multimodal_gen.runtime.layers.linear import ColumnParallelLinear
+from sglang.multimodal_gen.runtime.layers.linear import (
+    ColumnParallelLinear,
+    MergedColumnParallelLinear,
+    RowParallelLinear,
+)
 from sglang.multimodal_gen.runtime.layers.quantization.configs.base_config import (
     QuantizationConfig,
 )
@@ -1005,9 +1009,7 @@ class Flux2Transformer2DModel(CachableDiT, OffloadableDiTMixin):
         # 0. Handle input arguments
         if joint_attention_kwargs is not None:
             joint_attention_kwargs = joint_attention_kwargs.copy()
-            lora_scale = joint_attention_kwargs.pop("scale", 1.0)
-        else:
-            lora_scale = 1.0
+            joint_attention_kwargs.pop("scale", 1.0)
 
         num_txt_tokens = encoder_hidden_states.shape[1]
 

@@ -83,7 +83,9 @@ def fused_qknorm_rope(
     )
 
 
-BS_LIST = get_ci_test_range([1, 9, 256, 4097], [1, 257, 4097])
+BS_LIST = [2**n for n in range(13)]
+BS_LIST += [x + 1 for x in BS_LIST]
+BS_LIST = get_ci_test_range(BS_LIST, [1, 9, 129, 257, 2049, 4097])
 HEADS_LIST = get_ci_test_range([8, 16, 24, 32], [8, 24])
 HEAD_DIM_LIST = get_ci_test_range([64, 128, 256], [64, 128, 256])
 IS_NEOX_LIST = [False, True]
@@ -118,8 +120,8 @@ def test_qknorm_rope(
     for rope_dim in rope_dims:
         if is_neox:
             elems_per_thread = head_dim // 32
-            half_rotary_lanes = rope_dim // elems_per_thread // 2
-            if half_rotary_lanes < 1 or half_rotary_lanes & (half_rotary_lanes - 1):
+            rotary_lanes = rope_dim // elems_per_thread
+            if rotary_lanes < 2 or rotary_lanes & (rotary_lanes - 1):
                 continue
 
         q = torch.randn(batch_size, num_heads, head_dim, device=DEVICE, dtype=DTYPE)

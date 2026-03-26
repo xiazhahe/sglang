@@ -61,12 +61,12 @@ def can_use_fused_inplace_qknorm_rope(
         )
         return False
     if is_neox:
-        half_rotary_lanes = rope_dim // elems_per_thread // 2
-        if half_rotary_lanes < 1 or half_rotary_lanes & (half_rotary_lanes - 1):
+        rotary_lanes = rope_dim // elems_per_thread
+        if rotary_lanes < 2 or rotary_lanes & (rotary_lanes - 1):
             logger.warning(
-                "rope_dim=%s yields invalid half_rotary_lanes=%s for neox fused QKNorm+RoPE",
+                "rope_dim=%s yields invalid rotary_lanes=%s for neox fused QKNorm+RoPE; rotary lane count must be a power of 2",
                 rope_dim,
-                half_rotary_lanes,
+                rotary_lanes,
             )
             return False
     try:

@@ -34,7 +34,8 @@ constexpr uint32_t kWarpsPerBlock = kThreadsPerBlock / device::kWarpThreads;
 
 template <uint32_t kLaneCount>
 constexpr uint32_t active_mask() {
-  if constexpr (kLaneCount >= device::kWarpThreads) {
+  static_assert(kLaneCount <= device::kWarpThreads, "active_mask lane count must not exceed warp size");
+  if constexpr (kLaneCount == device::kWarpThreads) {
     return 0xffffffffu;
   } else {
     return (1u << kLaneCount) - 1u;
@@ -67,7 +68,9 @@ __global__ void fused_qknorm_rope_warp(const QKNormRopeParams __grid_constant__ 
   static_assert(kElemsPerThread % 2 == 0, "Each lane must own an even number of elements");
   static_assert(kRopeDim > 0 && kRopeDim <= kHeadDim, "Invalid rope dimension");
   static_assert(kRopeDim % kElemsPerThread == 0, "rope_dim must align with per-lane vector width");
-  static_assert(!kIsNeox || (kHalfRotaryLanes >= 1 && ((kHalfRotaryLanes & (kHalfRotaryLanes - 1)) == 0)));
+  static_assert(
+      !kIsNeox || (kRotaryLanes >= 2 && ((kRotaryLanes & (kRotaryLanes - 1)) == 0)),
+      "NeoX fused qknorm+rope requires rotary lane count to be a power of 2");
 
   using Packed = packed_t<DType>;
   using Storage = AlignedVector<Packed, kVecSize>;
@@ -122,7 +125,6 @@ __global__ void fused_qknorm_rope_warp(const QKNormRopeParams __grid_constant__ 
         const auto cos_ptr = static_cast<const float*>(pointer::offset(cos_sin_cache_ptr, pos * kCosSinStrideBytes));
         const auto sin_ptr = cos_ptr + kRopeDim / 2;
 
-        __syncwarp(kActiveMask);
 #pragma unroll
         for (uint32_t i = 0; i < kElemsPerThread; ++i) {
           float swapped = __shfl_xor_sync(kActiveMask, elems[i], kHalfRotaryLanes);
@@ -136,7 +138,6 @@ __global__ void fused_qknorm_rope_warp(const QKNormRopeParams __grid_constant__ 
           const float sin = load_cache_value(sin_ptr, half_idx);
           elems[i] = elems[i] * cos + swapped * sin;
         }
-        __syncwarp(kActiveMask);
       }
     } else {
       if (lane_id < kRotaryLanes) {
