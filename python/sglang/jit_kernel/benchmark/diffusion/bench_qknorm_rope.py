@@ -185,7 +185,7 @@ def profile_case(case: CaseSpec, provider: str, warmup: int, iters: int) -> None
     )
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", action="store_true")
     parser.add_argument("--provider", choices=["split", "fused"], default="fused")
@@ -194,7 +194,7 @@ def main() -> int:
     )
     parser.add_argument("--warmup", type=int, default=50)
     parser.add_argument("--iters", type=int, default=200)
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args(argv)
 
     if args.profile:
         profile_case(CASE_BY_NAME[args.case], args.provider, args.warmup, args.iters)
