@@ -31,7 +31,7 @@ def _jit_qknorm_rope_module(
     return load_jit(
         "qknorm_rope",
         *args,
-        cuda_files=["elementwise/qknorm_rope.cuh"],
+        cuda_files=["diffusion/qknorm_rope.cuh"],
         cuda_wrappers=[("qknorm_rope", f"QKNormRopeKernel<{args}>::run")],
     )
 
