@@ -22,7 +22,11 @@ from diffusers.models.normalization import AdaLayerNormContinuous
 
 from sglang.multimodal_gen.configs.models.dits.flux import FluxConfig
 from sglang.multimodal_gen.runtime.layers.attention import USPAttention
-from sglang.multimodal_gen.runtime.layers.layernorm import RMSNorm, apply_qk_norm
+from sglang.multimodal_gen.runtime.layers.layernorm import (
+    RMSNorm,
+    apply_qk_norm,
+    apply_qk_norm_rope,
+)
 from sglang.multimodal_gen.runtime.layers.linear import ColumnParallelLinear
 from sglang.multimodal_gen.runtime.layers.quantization.configs.base_config import (
     QuantizationConfig,
@@ -224,33 +228,7 @@ class Flux2Attention(torch.nn.Module, AttentionModuleMixin):
         key = key.unflatten(-1, (self.heads, -1))
         value = value.unflatten(-1, (self.heads, -1))
 
-        query, key = apply_qk_norm(
-            q=query,
-            k=key,
-            q_norm=self.norm_q,
-            k_norm=self.norm_k,
-            head_dim=self.head_dim,
-            allow_inplace=True,
-        )
-
-        if self.added_kv_proj_dim is not None:
-            encoder_query = encoder_query.unflatten(-1, (self.heads, -1))
-            encoder_key = encoder_key.unflatten(-1, (self.heads, -1))
-            encoder_value = encoder_value.unflatten(-1, (self.heads, -1))
-
-            encoder_query, encoder_key = apply_qk_norm(
-                q=encoder_query,
-                k=encoder_key,
-                q_norm=self.norm_added_q,
-                k_norm=self.norm_added_k,
-                head_dim=self.head_dim,
-                allow_inplace=True,
-            )
-
-            query = torch.cat([encoder_query, query], dim=1)
-            key = torch.cat([encoder_key, key], dim=1)
-            value = torch.cat([encoder_value, value], dim=1)
-
+        cos_sin_cache = None
         if freqs_cis is not None:
             cos, sin = freqs_cis
             cos_sin_cache = torch.cat(
@@ -260,8 +238,76 @@ class Flux2Attention(torch.nn.Module, AttentionModuleMixin):
                 ],
                 dim=-1,
             )
-            query, key = apply_flashinfer_rope_qk_inplace(
-                query, key, cos_sin_cache, is_neox=False
+
+        if self.added_kv_proj_dim is not None:
+            encoder_query = encoder_query.unflatten(-1, (self.heads, -1))
+            encoder_key = encoder_key.unflatten(-1, (self.heads, -1))
+            encoder_value = encoder_value.unflatten(-1, (self.heads, -1))
+
+            if cos_sin_cache is not None:
+                text_seq_len = encoder_query.shape[1]
+                encoder_query, encoder_key = apply_qk_norm_rope(
+                    q=encoder_query,
+                    k=encoder_key,
+                    q_norm=self.norm_added_q,
+                    k_norm=self.norm_added_k,
+                    head_dim=self.head_dim,
+                    cos_sin_cache=cos_sin_cache,
+                    is_neox=False,
+                    position_offset=0,
+                    allow_inplace=True,
+                )
+                query, key = apply_qk_norm_rope(
+                    q=query,
+                    k=key,
+                    q_norm=self.norm_q,
+                    k_norm=self.norm_k,
+                    head_dim=self.head_dim,
+                    cos_sin_cache=cos_sin_cache,
+                    is_neox=False,
+                    position_offset=text_seq_len,
+                    allow_inplace=True,
+                )
+            else:
+                encoder_query, encoder_key = apply_qk_norm(
+                    q=encoder_query,
+                    k=encoder_key,
+                    q_norm=self.norm_added_q,
+                    k_norm=self.norm_added_k,
+                    head_dim=self.head_dim,
+                    allow_inplace=True,
+                )
+                query, key = apply_qk_norm(
+                    q=query,
+                    k=key,
+                    q_norm=self.norm_q,
+                    k_norm=self.norm_k,
+                    head_dim=self.head_dim,
+                    allow_inplace=True,
+                )
+
+            query = torch.cat([encoder_query, query], dim=1)
+            key = torch.cat([encoder_key, key], dim=1)
+            value = torch.cat([encoder_value, value], dim=1)
+        elif cos_sin_cache is not None:
+            query, key = apply_qk_norm_rope(
+                q=query,
+                k=key,
+                q_norm=self.norm_q,
+                k_norm=self.norm_k,
+                head_dim=self.head_dim,
+                cos_sin_cache=cos_sin_cache,
+                is_neox=False,
+                allow_inplace=True,
+            )
+        else:
+            query, key = apply_qk_norm(
+                q=query,
+                k=key,
+                q_norm=self.norm_q,
+                k_norm=self.norm_k,
+                head_dim=self.head_dim,
+                allow_inplace=True,
             )
 
         num_rep = (
