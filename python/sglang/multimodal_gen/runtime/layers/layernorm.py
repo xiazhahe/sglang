@@ -11,13 +11,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from sglang.jit_kernel.diffusion.triton.norm import norm_infer, rms_norm_fn
-from sglang.jit_kernel.diffusion.triton.rmsnorm_onepass import triton_one_pass_rms_norm
-from sglang.jit_kernel.diffusion.triton.scale_shift import fuse_scale_shift_kernel
 from sglang.jit_kernel.diffusion.qknorm_rope import (
     can_use_fused_inplace_qknorm_rope,
     fused_inplace_qknorm_rope,
 )
+from sglang.jit_kernel.diffusion.triton.norm import norm_infer, rms_norm_fn
+from sglang.jit_kernel.diffusion.triton.rmsnorm_onepass import triton_one_pass_rms_norm
+from sglang.jit_kernel.diffusion.triton.scale_shift import fuse_scale_shift_kernel
 from sglang.jit_kernel.norm import can_use_fused_inplace_qknorm, fused_inplace_qknorm
 from sglang.multimodal_gen.runtime.distributed.parallel_state import (
     get_tensor_model_parallel_rank,
