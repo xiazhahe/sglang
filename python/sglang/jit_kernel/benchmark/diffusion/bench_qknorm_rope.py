@@ -1,14 +1,16 @@
-from __future__ import annotations
-
-import argparse
-import math
 from dataclasses import dataclass
-from typing import Callable
+from typing import Tuple
 
 import torch
+import triton
 import triton.testing
 
-from sglang.jit_kernel.benchmark.utils import DEFAULT_DEVICE, DEFAULT_DTYPE
+from sglang.jit_kernel.benchmark.utils import (
+    DEFAULT_DEVICE,
+    DEFAULT_DTYPE,
+    get_benchmark_range,
+    run_benchmark_no_cudagraph,
+)
 from sglang.test.ci.ci_register import register_cuda_ci
 
 register_cuda_ci(est_time=13, suite="stage-b-kernel-benchmark-1-gpu-large")
@@ -37,6 +39,13 @@ BENCH_CASES = (
     CaseSpec("batch2_medium", 2, 2048, 24, 128, 128, False),
 )
 CASE_BY_NAME = {case.name: case for case in BENCH_CASES}
+CASE_NAMES = get_benchmark_range(
+    full_range=[case.name for case in BENCH_CASES],
+    ci_range=[case.name for case in BENCH_CASES],
+)
+LINE_VALS = ["split", "fused"]
+LINE_NAMES = ["JIT QKNorm + FlashInfer RoPE", "SGL JIT Fused QKNorm+RoPE"]
+STYLES = [("red", "-"), ("blue", "--")]
 
 
 def create_cos_sin_cache(
@@ -156,74 +165,26 @@ def fused_qknorm_rope(inputs: dict[str, torch.Tensor | bool]) -> None:
     )
 
 
-def benchmark_case(
-    case: CaseSpec, fn_builder: Callable[[dict[str, torch.Tensor | bool]], None]
-) -> float:
-    inputs = make_inputs(case)
-    runtime_ms, _, _ = triton.testing.do_bench(
-        lambda: fn_builder(inputs), quantiles=(0.5, 0.2, 0.8)
+@triton.testing.perf_report(
+    triton.testing.Benchmark(
+        x_names=["case_name"],
+        x_vals=CASE_NAMES,
+        line_arg="provider",
+        line_vals=LINE_VALS,
+        line_names=LINE_NAMES,
+        styles=STYLES,
+        ylabel="us",
+        plot_name="diffusion-qknorm-rope-performance",
+        args={},
     )
-    return float(runtime_ms)
-
-
-def profile_case(case: CaseSpec, provider: str, warmup: int, iters: int) -> None:
+)
+def benchmark(case_name: str, provider: str) -> Tuple[float, float, float]:
+    case = CASE_BY_NAME[case_name]
     inputs = make_inputs(case)
     fn = split_qknorm_rope if provider == "split" else fused_qknorm_rope
-    for _ in range(warmup):
-        fn(inputs)
-    torch.cuda.synchronize()
-    starter = torch.cuda.Event(enable_timing=True)
-    ender = torch.cuda.Event(enable_timing=True)
-    starter.record()
-    for _ in range(iters):
-        fn(inputs)
-    ender.record()
-    torch.cuda.synchronize()
-    total_ms = starter.elapsed_time(ender)
-    print(
-        f"PROFILE {case.name} provider={provider} avg_ms={total_ms / iters:.6f} total_ms={total_ms:.6f}"
-    )
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--profile", action="store_true")
-    parser.add_argument("--provider", choices=["split", "fused"], default="fused")
-    parser.add_argument(
-        "--case", choices=sorted(CASE_BY_NAME), default="qwen_image_1024"
-    )
-    parser.add_argument("--warmup", type=int, default=50)
-    parser.add_argument("--iters", type=int, default=200)
-    args, _ = parser.parse_known_args(argv)
-
-    if args.profile:
-        profile_case(CASE_BY_NAME[args.case], args.provider, args.warmup, args.iters)
-        return 0
-
-    weighted_split = 0.0
-    weighted_fused = 0.0
-    weight_sum = 0.0
-    for case in BENCH_CASES:
-        split_ms = benchmark_case(case, split_qknorm_rope)
-        fused_ms = benchmark_case(case, fused_qknorm_rope)
-        speedup = split_ms / fused_ms if fused_ms > 0 else math.inf
-        print(
-            f"CASE {case.name}: split_ms={split_ms:.6f} fused_ms={fused_ms:.6f} speedup={speedup:.4f}x"
-        )
-        weight = float(
-            case.batch_size * case.num_tokens * case.num_heads * case.head_dim
-        )
-        weight_sum += weight
-        weighted_split += weight * split_ms
-        weighted_fused += weight * fused_ms
-
-    avg_split = weighted_split / weight_sum
-    avg_fused = weighted_fused / weight_sum
-    print(f"SPLIT_MS: {avg_split:.6f}")
-    print(f"FUSED_MS: {avg_fused:.6f}")
-    print(f"SPEEDUP: {avg_split / avg_fused:.6f}x")
-    return 0
+    return run_benchmark_no_cudagraph(lambda: fn(inputs))
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    print("Running diffusion qknorm + rope performance benchmark...")
+    benchmark.run(print_data=True)
