@@ -153,9 +153,13 @@ def fused_qknorm_rope(inputs: dict[str, torch.Tensor | bool]) -> None:
     )
 
 
-def benchmark_case(case: CaseSpec, fn_builder: Callable[[dict[str, torch.Tensor | bool]], None]) -> float:
+def benchmark_case(
+    case: CaseSpec, fn_builder: Callable[[dict[str, torch.Tensor | bool]], None]
+) -> float:
     inputs = make_inputs(case)
-    runtime_ms, _, _ = triton.testing.do_bench(lambda: fn_builder(inputs), quantiles=(0.5, 0.2, 0.8))
+    runtime_ms, _, _ = triton.testing.do_bench(
+        lambda: fn_builder(inputs), quantiles=(0.5, 0.2, 0.8)
+    )
     return float(runtime_ms)
 
 
@@ -182,7 +186,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", action="store_true")
     parser.add_argument("--provider", choices=["split", "fused"], default="fused")
-    parser.add_argument("--case", choices=sorted(CASE_BY_NAME), default="qwen_image_1024")
+    parser.add_argument(
+        "--case", choices=sorted(CASE_BY_NAME), default="qwen_image_1024"
+    )
     parser.add_argument("--warmup", type=int, default=50)
     parser.add_argument("--iters", type=int, default=200)
     args = parser.parse_args()
@@ -201,7 +207,9 @@ def main() -> int:
         print(
             f"CASE {case.name}: split_ms={split_ms:.6f} fused_ms={fused_ms:.6f} speedup={speedup:.4f}x"
         )
-        weight = float(case.batch_size * case.num_tokens * case.num_heads * case.head_dim)
+        weight = float(
+            case.batch_size * case.num_tokens * case.num_heads * case.head_dim
+        )
         weight_sum += weight
         weighted_split += weight * split_ms
         weighted_fused += weight * fused_ms

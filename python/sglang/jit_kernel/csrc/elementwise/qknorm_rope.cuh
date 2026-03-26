@@ -1,5 +1,6 @@
-#include <sgl_kernel/runtime.cuh>
 #include <sgl_kernel/tensor.h>
+
+#include <sgl_kernel/runtime.cuh>
 #include <sgl_kernel/type.cuh>
 #include <sgl_kernel/utils.cuh>
 #include <sgl_kernel/vec.cuh>
@@ -71,10 +72,8 @@ __global__ void fused_qknorm_rope_warp(const QKNormRopeParams __grid_constant__ 
   using Packed = packed_t<DType>;
   using Storage = AlignedVector<Packed, kVecSize>;
 
-  const auto& [
-    q_ptr, k_ptr, q_weight_ptr, k_weight_ptr, cos_sin_cache_ptr, positions, q_stride_bytes, k_stride_bytes,
-    head_stride_bytes, num_qo_heads, num_kv_heads, num_tokens, eps
-  ] = params;
+  const auto& [q_ptr, k_ptr, q_weight_ptr, k_weight_ptr, cos_sin_cache_ptr, positions, q_stride_bytes, k_stride_bytes, head_stride_bytes, num_qo_heads, num_kv_heads, num_tokens, eps] =
+      params;
 
   const uint32_t lane_id = threadIdx.x % kWarpThreads;
   const uint32_t warp_id = threadIdx.x / kWarpThreads;
@@ -198,16 +197,8 @@ struct QKNormRopeKernel {
     R.set_value(kRopeDim);
     device.set_options<kDLCUDA>();
 
-    TensorMatcher({N, Q, D})
-        .with_strides({Dq, Dd, 1})
-        .with_dtype<DType>()
-        .with_device(device)
-        .verify(q);
-    TensorMatcher({N, K, D})
-        .with_strides({Dk, Dd, 1})
-        .with_dtype<DType>()
-        .with_device(device)
-        .verify(k);
+    TensorMatcher({N, Q, D}).with_strides({Dq, Dd, 1}).with_dtype<DType>().with_device(device).verify(q);
+    TensorMatcher({N, K, D}).with_strides({Dk, Dd, 1}).with_dtype<DType>().with_device(device).verify(k);
     TensorMatcher({D}).with_dtype<DType>().with_device(device).verify(q_weight).verify(k_weight);
     TensorMatcher({-1, R}).with_dtype<float>().with_device(device).verify(cos_sin_cache);
     TensorMatcher({N}).with_dtype<int32_t, int64_t>(id_type).with_device(device).verify(positions);
