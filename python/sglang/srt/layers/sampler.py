@@ -399,7 +399,7 @@ class Sampler(nn.Module):
             (
                 logits_output.next_token_top_logprobs_val,
                 logits_output.next_token_top_logprobs_idx,
-            ) = get_top_logprobs(logprobs, top_logprobs_nums)
+            ) = get_top_logprobs(logprobs, top_logprobs_nums, no_copy_to_cpu=True)
 
         # Handle token_ids logprobs if requested
         if needs_token_ids_logprobs:
